@@ -4,12 +4,14 @@
 	<parent>
 		<groupId>eu.neclab.iotplatform</groupId>
 		<artifactId>IoTbrokerParent</artifactId>
-		<version>4.3.3-SNAPSHOT</version>
+		<version>4.3.3</version>
 		<relativePath>../IoTbrokerParent</relativePath>
 	</parent>
 
 	<modelVersion>4.0.0</modelVersion>
 	<artifactId>ngsi.api</artifactId>
+	<version>4.3.3-SNAPSHOT</version>
+	
 	<name>eu.neclab.iotplatform.ngsi.api</name>
 	<packaging>bundle</packaging>
 
