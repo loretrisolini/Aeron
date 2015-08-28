@@ -10,7 +10,6 @@
 
 	<modelVersion>4.0.0</modelVersion>
 	<artifactId>ngsi.api</artifactId>
-	<version>4.3.3-SNAPSHOT</version>
 	
 	<name>eu.neclab.iotplatform.ngsi.api</name>
 	<packaging>bundle</packaging>
