@@ -10,7 +10,6 @@
 
 	<artifactId>iotbroker.commons</artifactId>
 	<packaging>bundle</packaging>
-	<version>4.3.3-SNAPSHOT</version>
 
 	<build>
 		<resources>
