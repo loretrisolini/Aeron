@@ -49,7 +49,6 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
-import java.util.concurrent.ArrayBlockingQueue;
 
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.impl.auth.BasicScheme;
@@ -61,7 +60,6 @@ import org.springframework.beans.factory.annotation.Value;
 import eu.neclab.iotplatform.couchdb.http.Client;
 import eu.neclab.iotplatform.couchdb.http.HttpRequester;
 import eu.neclab.iotplatform.iotbroker.commons.FullHttpResponse;
-import eu.neclab.iotplatform.iotbroker.commons.GenerateUniqueID;
 import eu.neclab.iotplatform.iotbroker.commons.interfaces.BigDataRepository;
 import eu.neclab.iotplatform.ngsi.api.datamodel.ContextAttribute;
 import eu.neclab.iotplatform.ngsi.api.datamodel.ContextElement;
@@ -218,10 +216,10 @@ public class CouchDB implements BigDataRepository {
 				}
 
 				// Generate the documentKey for historical data
-				String documentKey = this.generateKeyForHistoricalData(
-						contextElement.getEntityId(), contextElement
-								.getContextAttributeList().iterator().next()
-								.getName(), timestamp);
+//				String documentKey = this.generateKeyForHistoricalData(
+//						contextElement.getEntityId(), contextElement
+//								.getContextAttributeList().iterator().next()
+//								.getName(), timestamp);
 
 				JSONObject xmlJSONObj = XML.toJSONObject(contextElement
 						.toString());
@@ -229,9 +227,21 @@ public class CouchDB implements BigDataRepository {
 				// Store the historical data
 				logger.debug("JSON Object to store:" + xmlJSONObj.toString(2));
 				try {
+					FullHttpResponse dbResponse = queryDB(contextElement.getEntityId());
+					
+					JSONObject resp = new JSONObject(dbResponse.getBody());
+					
+					if(!resp.isNull("_rev")){
+						
+						xmlJSONObj.append("_rev", resp.get("_rev"));
+					}
+					
 					Client.sendRequest(new URL(getCouchDB_ip() + couchDB_NAME
-							+ "/" + documentKey), "PUT", xmlJSONObj.toString(),
+							+ "/" + contextElement.getEntityId().getId()), "PUT", xmlJSONObj.toString(),
 							"application/json", authentication);
+					
+
+					
 				} catch (MalformedURLException e) {
 					logger.info("Impossible to store information into CouchDB",
 							e);
@@ -299,25 +309,27 @@ public class CouchDB implements BigDataRepository {
 
 		Date timestamp = null;
 
-		for (ContextMetadata contextMetadata : contextAttribute.getMetadata()) {
-
-			if (contextMetadata.getName().equalsIgnoreCase("creation_time")) {
-
-				/*
-				 * This contextMetadata is set by the leafengine connector
-				 */
-
-				// example timestamp "2015.05.29 19:24:28:769 +0000"
-				// "yyyy.MM.dd HH:mm:ss:SSS Z"
-
-				SimpleDateFormat parserSDF = new SimpleDateFormat(
-						"yyyy.MM.dd HH:mm:ss:SSS Z");
-				timestamp = parserSDF.parse(
-						(String) contextMetadata.getValue(), new ParsePosition(
-								0));
-				break;
+		if(contextAttribute.getMetadata() != null){
+			for (ContextMetadata contextMetadata : contextAttribute.getMetadata()) {
+	
+				if (contextMetadata.getName().equalsIgnoreCase("creation_time")) {
+	
+					/*
+					 * This contextMetadata is set by the leafengine connector
+					 */
+	
+					// example timestamp "2015.05.29 19:24:28:769 +0000"
+					// "yyyy.MM.dd HH:mm:ss:SSS Z"
+	
+					SimpleDateFormat parserSDF = new SimpleDateFormat(
+							"yyyy.MM.dd HH:mm:ss:SSS Z");
+					timestamp = parserSDF.parse(
+							(String) contextMetadata.getValue(), new ParsePosition(
+									0));
+					break;
+				}
+	
 			}
-
 		}
 
 		return timestamp;
@@ -338,7 +350,26 @@ public class CouchDB implements BigDataRepository {
 
 		FullHttpResponse dbResponse = queryDB(entityId);
 
-		return null;
+		JSONObject resp = new JSONObject(dbResponse.getBody());
+		
+		if(!resp.isNull("contextElement")){
+			
+			JSONObject contextElement = resp.getJSONObject("contextElement");
+			
+			logger.debug("response: "+contextElement.toString());
+			
+			ContextElementResponse contextResponse = (ContextElementResponse)ContextElementResponse.convertStringToXml(contextElement.toString(), ContextElementResponse.class);
+			
+			List<ContextElementResponse> contextElementList = new ArrayList<>();
+			
+			contextElementList.add(contextResponse);
+			
+			return contextElementList;
+		}
+		else{
+			return null;
+		}
+		
 	}
 
 	/**
@@ -349,10 +380,46 @@ public class CouchDB implements BigDataRepository {
 	 * @return
 	 */
 	private FullHttpResponse queryDB(EntityId entityId) {
+		
+		if (couchDB_ip == null) {
+			setCouchDB_ip();
+		}
+
+		logger.info("Send update to the CouchDB storage...");
+
+		if (couchDB_USERNAME != null && !couchDB_USERNAME.trim().isEmpty()
+				&& couchDB_PASSWORD != null
+				&& !couchDB_PASSWORD.trim().isEmpty()) {
+			UsernamePasswordCredentials creds = new UsernamePasswordCredentials(
+					couchDB_USERNAME, couchDB_PASSWORD);
+			authentication = BasicScheme.authenticate(creds, "US-ASCII", false)
+					.toString();
+		}
+
+		if (!databaseExist) {
+			try {
+				if (couchDBtool.checkDB(getCouchDB_ip(), couchDB_NAME,
+						authentication)) {
+
+					databaseExist = true;
+
+				} else {
+
+					couchDBtool.createDb(getCouchDB_ip(), couchDB_NAME,
+							authentication);
+					databaseExist = true;
+				}
+			} catch (MalformedURLException e) {
+				logger.info("Impossible to store information into CouchDB", e);
+				return null;
+			}
+		}
+		
 		FullHttpResponse response = null;
 		try {
-			response = HttpRequester.sendGet(new URL(couchDB_HOST + "/"
-					+ couchDB_NAME + "entity-" + entityId.getId()));
+
+			response = HttpRequester.sendGet(new URL(couchDB_ip + "/"
+					+ couchDB_NAME + "/" + entityId.getId()));
 		} catch (MalformedURLException e) {
 			logger.error("Error: ", e);
 		} catch (Exception e) {

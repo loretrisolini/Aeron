@@ -1161,20 +1161,20 @@ public class IotBrokerCore implements Ngsi10Interface, Ngsi9Interface {
 		/**
 		 * Dump data in Big Data Repository if present.
 		 */
-		// if (bigDataRepository != null) {
-		//
-		// new Thread() {
-		//
-		// @Override
-		// public void run() {
-		//
-		// bigDataRepository.storeData(lContextElements);
-		//
-		// }
-		// }.start();
-		//
-		// }
-		//
+		 if (bigDataRepository != null) {
+		
+			 new Thread() {
+			
+			 @Override
+			 public void run() {
+			
+			 bigDataRepository.storeData(lContextElements);
+			
+			 }
+			 }.start();
+		
+		 }
+		
 		try {
 
 			response = ngsi10Requester.updateContext(updateContextRequest,
