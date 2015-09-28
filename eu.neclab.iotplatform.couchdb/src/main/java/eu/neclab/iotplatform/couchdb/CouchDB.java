@@ -42,6 +42,7 @@
 package eu.neclab.iotplatform.couchdb;
 
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URL;
 import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
@@ -53,6 +54,7 @@ import java.util.List;
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.impl.auth.BasicScheme;
 import org.apache.log4j.Logger;
+import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.XML;
 import org.springframework.beans.factory.annotation.Value;
@@ -66,6 +68,7 @@ import eu.neclab.iotplatform.ngsi.api.datamodel.ContextElement;
 import eu.neclab.iotplatform.ngsi.api.datamodel.ContextElementResponse;
 import eu.neclab.iotplatform.ngsi.api.datamodel.ContextMetadata;
 import eu.neclab.iotplatform.ngsi.api.datamodel.EntityId;
+import eu.neclab.iotplatform.ngsi.api.datamodel.StatusCode;
 
 public class CouchDB implements BigDataRepository {
 
@@ -224,6 +227,13 @@ public class CouchDB implements BigDataRepository {
 				JSONObject xmlJSONObj = XML.toJSONObject(contextElement
 						.toString());
 
+				//rename contextAttributeList to attributes for validation
+				//of json schema of contextElement
+				(xmlJSONObj.getJSONObject("contextElement"))
+						.put("attributes", 
+						xmlJSONObj.getJSONObject("contextElement").getJSONObject("contextAttributeList").get("contextAttribute"));
+				(xmlJSONObj.getJSONObject("contextElement")).remove("contextAttributeList");
+				
 				// Store the historical data
 				logger.debug("JSON Object to store:" + xmlJSONObj.toString(2));
 				try {
@@ -233,7 +243,7 @@ public class CouchDB implements BigDataRepository {
 					
 					if(!resp.isNull("_rev")){
 						
-						xmlJSONObj.append("_rev", resp.get("_rev"));
+						xmlJSONObj.put("_rev", resp.getString("_rev"));
 					}
 					
 					Client.sendRequest(new URL(getCouchDB_ip() + couchDB_NAME
@@ -354,11 +364,7 @@ public class CouchDB implements BigDataRepository {
 		
 		if(!resp.isNull("contextElement")){
 			
-			JSONObject contextElement = resp.getJSONObject("contextElement");
-			
-			logger.debug("response: "+contextElement.toString());
-			
-			ContextElementResponse contextResponse = (ContextElementResponse)ContextElementResponse.convertStringToXml(contextElement.toString(), ContextElementResponse.class);
+			ContextElementResponse contextResponse = fromJsonToContextElementResponse(resp.getJSONObject("contextElement"));
 			
 			List<ContextElementResponse> contextElementList = new ArrayList<>();
 			
@@ -370,6 +376,53 @@ public class CouchDB implements BigDataRepository {
 			return null;
 		}
 		
+	}
+
+	private ContextElementResponse fromJsonToContextElementResponse(
+			JSONObject contElemJson) {
+		
+		ContextElementResponse contextElemResp = new ContextElementResponse();
+		
+		ContextElement contextElem = new ContextElement();
+		
+		//read values for EntityId structure
+		EntityId entId = new EntityId();
+		
+		entId.setId(contElemJson.getJSONObject("entityId").getString("id"));
+		
+		entId.setType(URI.create(contElemJson.getJSONObject("entityId").getString("type")));
+		
+		entId.setIsPattern(contElemJson.getJSONObject("entityId").getBoolean("isPattern"));
+		
+		contextElem.setEntityId(entId);
+		
+		//read values for ContextAttributeList
+		List<ContextAttribute> contAttrList = new ArrayList<>();
+		
+		JSONArray attributes = contElemJson.getJSONArray("attributes");
+		
+		for(int i=0; i < attributes.length(); i++){
+			
+			JSONObject attr = attributes.getJSONObject(i);
+			
+			ContextAttribute contAttr = new ContextAttribute();
+			
+			contAttr.setName(attr.getString("name"));
+			
+			contAttr.setType(URI.create(attr.getString("type")));
+			
+			contAttr.setcontextValue(String.valueOf(attr.get("contextValue")));
+			
+			contAttrList.add(contAttr);
+		}
+		
+		contextElem.setEntityId(entId);
+		contextElem.setContextAttributeList(contAttrList);
+		
+		//set ContextElement Response
+		contextElemResp.setContextElement(contextElem);
+		
+		return contextElemResp;
 	}
 
 	/**
