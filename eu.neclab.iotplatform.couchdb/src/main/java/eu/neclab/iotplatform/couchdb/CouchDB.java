@@ -224,15 +224,10 @@ public class CouchDB implements BigDataRepository {
 //								.getContextAttributeList().iterator().next()
 //								.getName(), timestamp);
 
-				JSONObject xmlJSONObj = XML.toJSONObject(contextElement
-						.toString());
-
-				//rename contextAttributeList to attributes for validation
-				//of json schema of contextElement
-				(xmlJSONObj.getJSONObject("contextElement"))
-						.put("attributes", 
-						xmlJSONObj.getJSONObject("contextElement").getJSONObject("contextAttributeList").get("contextAttribute"));
-				(xmlJSONObj.getJSONObject("contextElement")).remove("contextAttributeList");
+//				JSONObject xmlJSONObj = XML.toJSONObject(contextElement
+//						.toString());
+				
+				JSONObject xmlJSONObj = fromContextElementToJson(contextElement);
 				
 				// Store the historical data
 				logger.debug("JSON Object to store:" + xmlJSONObj.toString(2));
@@ -267,6 +262,41 @@ public class CouchDB implements BigDataRepository {
 
 		}
 
+	}
+
+	private JSONObject fromContextElementToJson(ContextElement contextElement) {
+
+		JSONObject contexElemJSONObj = new JSONObject();
+		
+		JSONObject entityId = new JSONObject();
+		
+		entityId.put("id", contextElement.getEntityId().getId());
+		entityId.put("type", contextElement.getEntityId().getType());
+		entityId.put("isPattern", contextElement.getEntityId().getIsPattern());
+		
+		contexElemJSONObj.put("entityId", entityId);
+		
+		JSONArray attributes = new JSONArray();
+		
+		List<ContextAttribute> contAttrList = contextElement.getContextAttributeList();
+		
+		for(ContextAttribute contAttr: contAttrList){
+			
+			JSONObject contAttrJSONObj = new JSONObject();
+			
+			contAttrJSONObj.put("name", contAttr.getName());
+			contAttrJSONObj.put("type", contAttr.getType());
+			contAttrJSONObj.put("contextValue", contAttr.getcontextValue());
+			
+			attributes.put(contAttrJSONObj);
+		}
+		
+		contexElemJSONObj.put("attributes", attributes);
+		
+		//return the ContElem enclosed in a contextElement Json object
+		//because when it is read is more easy to identify the
+		//elements of a complex structure ContextElement
+		return (new JSONObject()).put("contextElement", contexElemJSONObj);
 	}
 
 	private String generateKeyForHistoricalData(EntityId entityId,
