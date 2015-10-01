@@ -239,13 +239,16 @@ public class CouchDB implements BigDataRepository {
 				try {
 					FullHttpResponse dbResponse = queryDB(contextElement.getEntityId());
 					
-					JSONObject resp = new JSONObject(dbResponse.getBody());
-					
-					if(!resp.isNull("_rev")){
+					//check if the response from the DB is empty
+					if(dbResponse.getBody() != null){
+						JSONObject resp = new JSONObject(dbResponse.getBody());
 						
-						xmlJSONObj.put("_rev", resp.getString("_rev"));
+						if(!resp.isNull("_rev")){
+							
+							xmlJSONObj.put("_rev", resp.getString("_rev"));
+						}
 					}
-					
+						
 					Client.sendRequest(new URL(getCouchDB_ip() + couchDB_NAME
 							+ "/" + contextElement.getEntityId().getId()), "PUT", xmlJSONObj.toString(),
 							"application/json", authentication);

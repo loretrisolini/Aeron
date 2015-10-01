@@ -68,7 +68,7 @@ public class ContextRegistrationAttribute extends NgsiStructure {
 	@XmlElement(name = "isDomain")
 	private boolean isDomain = false;
 
-	@XmlElementWrapper(name = "metaData")
+	@XmlElementWrapper(name = "metadata")
 	@XmlElement(name = "contextMetadata")
 	private List<ContextMetadata> contextMetadata = null;
 
