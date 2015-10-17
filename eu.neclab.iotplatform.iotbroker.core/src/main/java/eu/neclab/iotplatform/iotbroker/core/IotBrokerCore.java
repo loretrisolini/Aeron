@@ -1156,24 +1156,24 @@ public class IotBrokerCore implements Ngsi10Interface, Ngsi9Interface {
 		updateContextRequest = new UpdateContextRequest(listContextElement,
 				request.getUpdateAction());
 
-		logger.info("Started Contact pub/sub broker..");
-
-		/**
-		 * Dump data in Big Data Repository if present.
-		 */
-		 if (bigDataRepository != null) {
-		
-			 new Thread() {
-			
-			 @Override
-			 public void run() {
-			
-			 bigDataRepository.storeData(lContextElements);
-			
-			 }
-			 }.start();
-		
-		 }
+//		logger.info("Started Contact pub/sub broker..");
+//
+//		/**
+//		 * Dump data in Big Data Repository if present.
+//		 */
+//		 if (bigDataRepository != null) {
+//		
+//			 new Thread() {
+//			
+//			 @Override
+//			 public void run() {
+//			
+//			 bigDataRepository.storeData(lContextElements);
+//			
+//			 }
+//			 }.start();
+//		
+//		 }
 		
 		try {
 

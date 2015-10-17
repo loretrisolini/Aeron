@@ -42,7 +42,6 @@
 package eu.neclab.iotplatform.couchdb;
 
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URL;
 import java.text.ParsePosition;
 import java.text.SimpleDateFormat;
@@ -50,11 +49,11 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
 
 import org.apache.http.auth.UsernamePasswordCredentials;
 import org.apache.http.impl.auth.BasicScheme;
 import org.apache.log4j.Logger;
-import org.json.JSONArray;
 import org.json.JSONObject;
 import org.json.XML;
 import org.springframework.beans.factory.annotation.Value;
@@ -62,13 +61,13 @@ import org.springframework.beans.factory.annotation.Value;
 import eu.neclab.iotplatform.couchdb.http.Client;
 import eu.neclab.iotplatform.couchdb.http.HttpRequester;
 import eu.neclab.iotplatform.iotbroker.commons.FullHttpResponse;
+import eu.neclab.iotplatform.iotbroker.commons.GenerateUniqueID;
 import eu.neclab.iotplatform.iotbroker.commons.interfaces.BigDataRepository;
 import eu.neclab.iotplatform.ngsi.api.datamodel.ContextAttribute;
 import eu.neclab.iotplatform.ngsi.api.datamodel.ContextElement;
 import eu.neclab.iotplatform.ngsi.api.datamodel.ContextElementResponse;
 import eu.neclab.iotplatform.ngsi.api.datamodel.ContextMetadata;
 import eu.neclab.iotplatform.ngsi.api.datamodel.EntityId;
-import eu.neclab.iotplatform.ngsi.api.datamodel.StatusCode;
 
 public class CouchDB implements BigDataRepository {
 
@@ -219,37 +218,20 @@ public class CouchDB implements BigDataRepository {
 				}
 
 				// Generate the documentKey for historical data
-//				String documentKey = this.generateKeyForHistoricalData(
-//						contextElement.getEntityId(), contextElement
-//								.getContextAttributeList().iterator().next()
-//								.getName(), timestamp);
+				String documentKey = this.generateKeyForHistoricalData(
+						contextElement.getEntityId(), contextElement
+								.getContextAttributeList().iterator().next()
+								.getName(), timestamp);
 
-//				JSONObject xmlJSONObj = XML.toJSONObject(contextElement
-//						.toString());
-				
-				JSONObject xmlJSONObj = fromContextElementToJson(contextElement);
-				
+				JSONObject xmlJSONObj = XML.toJSONObject(contextElement
+						.toString());
+
 				// Store the historical data
 				logger.debug("JSON Object to store:" + xmlJSONObj.toString(2));
 				try {
-					FullHttpResponse dbResponse = queryDB(contextElement.getEntityId());
-					
-					//check if the response from the DB is empty
-					if(dbResponse.getBody() != null){
-						JSONObject resp = new JSONObject(dbResponse.getBody());
-						
-						if(!resp.isNull("_rev")){
-							
-							xmlJSONObj.put("_rev", resp.getString("_rev"));
-						}
-					}
-						
 					Client.sendRequest(new URL(getCouchDB_ip() + couchDB_NAME
-							+ "/" + contextElement.getEntityId().getId()), "PUT", xmlJSONObj.toString(),
+							+ "/" + documentKey), "PUT", xmlJSONObj.toString(),
 							"application/json", authentication);
-					
-
-					
 				} catch (MalformedURLException e) {
 					logger.info("Impossible to store information into CouchDB",
 							e);
@@ -262,41 +244,6 @@ public class CouchDB implements BigDataRepository {
 
 		}
 
-	}
-
-	private JSONObject fromContextElementToJson(ContextElement contextElement) {
-
-		JSONObject contexElemJSONObj = new JSONObject();
-		
-		JSONObject entityId = new JSONObject();
-		
-		entityId.put("id", contextElement.getEntityId().getId());
-		entityId.put("type", contextElement.getEntityId().getType());
-		entityId.put("isPattern", contextElement.getEntityId().getIsPattern());
-		
-		contexElemJSONObj.put("entityId", entityId);
-		
-		JSONArray attributes = new JSONArray();
-		
-		List<ContextAttribute> contAttrList = contextElement.getContextAttributeList();
-		
-		for(ContextAttribute contAttr: contAttrList){
-			
-			JSONObject contAttrJSONObj = new JSONObject();
-			
-			contAttrJSONObj.put("name", contAttr.getName());
-			contAttrJSONObj.put("type", contAttr.getType());
-			contAttrJSONObj.put("contextValue", contAttr.getcontextValue());
-			
-			attributes.put(contAttrJSONObj);
-		}
-		
-		contexElemJSONObj.put("attributes", attributes);
-		
-		//return the ContElem enclosed in a contextElement Json object
-		//because when it is read is more easy to identify the
-		//elements of a complex structure ContextElement
-		return (new JSONObject()).put("contextElement", contexElemJSONObj);
 	}
 
 	private String generateKeyForHistoricalData(EntityId entityId,
@@ -352,27 +299,25 @@ public class CouchDB implements BigDataRepository {
 
 		Date timestamp = null;
 
-		if(contextAttribute.getMetadata() != null){
-			for (ContextMetadata contextMetadata : contextAttribute.getMetadata()) {
-	
-				if (contextMetadata.getName().equalsIgnoreCase("creation_time")) {
-	
-					/*
-					 * This contextMetadata is set by the leafengine connector
-					 */
-	
-					// example timestamp "2015.05.29 19:24:28:769 +0000"
-					// "yyyy.MM.dd HH:mm:ss:SSS Z"
-	
-					SimpleDateFormat parserSDF = new SimpleDateFormat(
-							"yyyy.MM.dd HH:mm:ss:SSS Z");
-					timestamp = parserSDF.parse(
-							(String) contextMetadata.getValue(), new ParsePosition(
-									0));
-					break;
-				}
-	
+		for (ContextMetadata contextMetadata : contextAttribute.getMetadata()) {
+
+			if (contextMetadata.getName().equalsIgnoreCase("creation_time")) {
+
+				/*
+				 * This contextMetadata is set by the leafengine connector
+				 */
+
+				// example timestamp "2015.05.29 19:24:28:769 +0000"
+				// "yyyy.MM.dd HH:mm:ss:SSS Z"
+
+				SimpleDateFormat parserSDF = new SimpleDateFormat(
+						"yyyy.MM.dd HH:mm:ss:SSS Z");
+				timestamp = parserSDF.parse(
+						(String) contextMetadata.getValue(), new ParsePosition(
+								0));
+				break;
 			}
+
 		}
 
 		return timestamp;
@@ -393,69 +338,7 @@ public class CouchDB implements BigDataRepository {
 
 		FullHttpResponse dbResponse = queryDB(entityId);
 
-		JSONObject resp = new JSONObject(dbResponse.getBody());
-		
-		if(!resp.isNull("contextElement")){
-			
-			ContextElementResponse contextResponse = fromJsonToContextElementResponse(resp.getJSONObject("contextElement"));
-			
-			List<ContextElementResponse> contextElementList = new ArrayList<>();
-			
-			contextElementList.add(contextResponse);
-			
-			return contextElementList;
-		}
-		else{
-			return null;
-		}
-		
-	}
-
-	private ContextElementResponse fromJsonToContextElementResponse(
-			JSONObject contElemJson) {
-		
-		ContextElementResponse contextElemResp = new ContextElementResponse();
-		
-		ContextElement contextElem = new ContextElement();
-		
-		//read values for EntityId structure
-		EntityId entId = new EntityId();
-		
-		entId.setId(contElemJson.getJSONObject("entityId").getString("id"));
-		
-		entId.setType(URI.create(contElemJson.getJSONObject("entityId").getString("type")));
-		
-		entId.setIsPattern(contElemJson.getJSONObject("entityId").getBoolean("isPattern"));
-		
-		contextElem.setEntityId(entId);
-		
-		//read values for ContextAttributeList
-		List<ContextAttribute> contAttrList = new ArrayList<>();
-		
-		JSONArray attributes = contElemJson.getJSONArray("attributes");
-		
-		for(int i=0; i < attributes.length(); i++){
-			
-			JSONObject attr = attributes.getJSONObject(i);
-			
-			ContextAttribute contAttr = new ContextAttribute();
-			
-			contAttr.setName(attr.getString("name"));
-			
-			contAttr.setType(URI.create(attr.getString("type")));
-			
-			contAttr.setcontextValue(String.valueOf(attr.get("contextValue")));
-			
-			contAttrList.add(contAttr);
-		}
-		
-		contextElem.setEntityId(entId);
-		contextElem.setContextAttributeList(contAttrList);
-		
-		//set ContextElement Response
-		contextElemResp.setContextElement(contextElem);
-		
-		return contextElemResp;
+		return null;
 	}
 
 	/**
@@ -466,46 +349,10 @@ public class CouchDB implements BigDataRepository {
 	 * @return
 	 */
 	private FullHttpResponse queryDB(EntityId entityId) {
-		
-		if (couchDB_ip == null) {
-			setCouchDB_ip();
-		}
-
-		logger.info("Send update to the CouchDB storage...");
-
-		if (couchDB_USERNAME != null && !couchDB_USERNAME.trim().isEmpty()
-				&& couchDB_PASSWORD != null
-				&& !couchDB_PASSWORD.trim().isEmpty()) {
-			UsernamePasswordCredentials creds = new UsernamePasswordCredentials(
-					couchDB_USERNAME, couchDB_PASSWORD);
-			authentication = BasicScheme.authenticate(creds, "US-ASCII", false)
-					.toString();
-		}
-
-		if (!databaseExist) {
-			try {
-				if (couchDBtool.checkDB(getCouchDB_ip(), couchDB_NAME,
-						authentication)) {
-
-					databaseExist = true;
-
-				} else {
-
-					couchDBtool.createDb(getCouchDB_ip(), couchDB_NAME,
-							authentication);
-					databaseExist = true;
-				}
-			} catch (MalformedURLException e) {
-				logger.info("Impossible to store information into CouchDB", e);
-				return null;
-			}
-		}
-		
 		FullHttpResponse response = null;
 		try {
-
-			response = HttpRequester.sendGet(new URL(couchDB_ip + "/"
-					+ couchDB_NAME + "/" + entityId.getId()));
+			response = HttpRequester.sendGet(new URL(couchDB_HOST + "/"
+					+ couchDB_NAME + "entity-" + entityId.getId()));
 		} catch (MalformedURLException e) {
 			logger.error("Error: ", e);
 		} catch (Exception e) {
